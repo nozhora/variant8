@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+env:
+  PYTHON_VERSION: "3.11"
+  PIP_CACHE_DIR: ~/.cache/pip
+
 jobs:
   unit-test:
     name: 🧪 Unit Test
@@ -17,7 +21,26 @@ jobs:
       - name: 🐍 Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: 💾 Cache pip packages
+        uses: actions/cache@v3
+        id: pip-cache
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.local/lib/python${{ env.PYTHON_VERSION }}/site-packages
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: 💾 Cache pytest
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pytest
+          key: ${{ runner.os }}-pytest-${{ hashFiles('**/*.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pytest-
 
       - name: 📦 Install dependencies
         run: |
@@ -38,17 +61,32 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v3
 
-      - name: 🐳 Build and run app
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: 💾 Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.local/lib/python${{ env.PYTHON_VERSION }}/site-packages
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: 🚀 Run staging app
         env:
           DATABASE_URL: sqlite+aiosqlite:///./staging_auth.db
         run: |
-          docker build -t auth-api:latest .
-          docker run -d \
-            --name staging-app \
-            -e DATABASE_URL=sqlite+aiosqlite:///./staging_auth.db \
-            -v $(pwd)/staging_auth.db:/app/staging_auth.db \
-            -p 8000:8000 \
-            auth-api:latest
+          python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+          echo "Staging app started on port 8000"
 
   integration-test:
     name: 🧪 Integration Test
@@ -59,17 +97,30 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v3
 
-      - name: 🐳 Build test container
-        run: docker build -t auth-api-test:latest .
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: 🧪 Run integration tests in Docker
+      - name: 💾 Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.local/lib/python${{ env.PYTHON_VERSION }}/site-packages
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 🧪 Run integration tests
         env:
           DATABASE_URL: sqlite+aiosqlite:///./integration_test_auth.db
-        run: |
-          docker run --rm \
-          -e DATABASE_URL=sqlite+aiosqlite:///./integration_test_auth.db \
-          --entrypoint "" \
-          auth-api-test pytest tests/test_integration.py -v
+        run: pytest tests/test_integration.py -v
 
   production:
     name: 🚀 Deploy to Production
@@ -80,17 +131,31 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v3
 
-      - name: 🐳 Build and run production app
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: 💾 Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.local/lib/python${{ env.PYTHON_VERSION }}/site-packages
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 🚀 Run production app
         env:
+          DATABASE_URL: sqlite+aiosqlite:///./prod_auth.db
           JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
         run: |
-          docker build -t auth-api-prod:latest .
-          docker run -d \
-            --name prod-app \
-            -e DATABASE_URL=sqlite+aiosqlite:///./prod_auth.db \
-            -e JWT_ACCESS_SECRET=${{ secrets.JWT_ACCESS_SECRET }} \
-            -e JWT_REFRESH_SECRET=${{ secrets.JWT_REFRESH_SECRET }} \
-            -v $(pwd)/prod_auth.db:/app/prod_auth.db \
-            -p 8000:8000 \
-            auth-api-prod:latest
+          python -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+          echo "Production app started on port 8000"

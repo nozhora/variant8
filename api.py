@@ -75,6 +75,7 @@ def create_refresh_token(data: dict):
     return create_token(data, JWT_REFRESH_SECRET)
 
 
+# уровня доступа
 def get_scopes_for_role(role: Role):
     match role:
         case Role.admin:
@@ -113,6 +114,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
     return {"user": db_user, "scope": payload.get("scope")}
 
 
+# проверка токена
 def require_all_scopes(required_scopes: List[TokenScope]):
     async def scope_checker(context: dict = Depends(get_current_user)):
         token_scopes = context.get("scope", [])
@@ -123,13 +125,16 @@ def require_all_scopes(required_scopes: List[TokenScope]):
     return scope_checker
 
 
+# логин
 @router.post("/login", response_model=TokenModel)
 async def login(user: UserModel, db=Depends(get_db)):
     db_user = await get_user_by_username(user.username, db)
 
+    # существование пользователя и правильный пароль
     if not db_user or not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
+    # генерация токенов
     access_payload = {
         "sub": db_user.username,
         "scope": get_scopes_for_role(db_user.user_role),
@@ -150,11 +155,13 @@ async def login(user: UserModel, db=Depends(get_db)):
 @router.post("/register", response_model=TokenModel)
 async def register(user: UserModel, db=Depends(get_db)):
     db_user = await get_user_by_username(user.username, db)
+    # не существоавние  пользователя
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
 
     result = await create_user(user, db)
 
+    # генерация токенов
     access_payload = {
         "sub": result.username,
         "scope": get_scopes_for_role(result.user_role),
