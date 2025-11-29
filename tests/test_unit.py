@@ -13,7 +13,7 @@ def test_hash_password():
     h1 = hash_password(password)
     h2 = hash_password(password)
     assert isinstance(h1, str) and isinstance(h2, str)
-    assert h1 == h2
+    assert h1 != h2
 
     assert verify_password(password, h1) is True
     assert verify_password(password, h2) is True
