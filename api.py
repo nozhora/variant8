@@ -251,4 +251,4 @@ async def read_user_route(
 
 @router.get("/health")
 async def health_check():
-    return {"status": "Hello WorldЫАВПРОЛ"}
+    return {"status": "Hello World"}
